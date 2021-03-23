@@ -20,22 +20,32 @@
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
+#include <Wire.h>
+#include <SparkFunBME280.h>
 
 // Update these with values suitable for your network.
 
 const char* ssid = "cirrus";
 const char* password = "7138982048";
 const char* mqtt_server = "mqtt.bekinected.com";
+const char* SUB_TOPIC = "environ/sub";
+const char* PUB_TOPIC = "environ/test";
+ String humidity, baro, alt, temp, device;
+ float baro_f;
+ char msg[70];
+ char * mp = msg;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+ BME280 mySensor;
+ 
 unsigned long lastMsg = 0;
 #define MSG_BUFFER_SIZE	(50)
-char msg[MSG_BUFFER_SIZE];
+// char msg[MSG_BUFFER_SIZE];
 int value = 0;
 
+// setup wifi
 void setup_wifi() {
-
   delay(10);
   // We start by connecting to a WiFi network
   Serial.println();
@@ -51,13 +61,30 @@ void setup_wifi() {
   }
 
   randomSeed(micros());
-
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 }
 
+// initialize I2C
+void setup_I2C()
+{
+  Serial.println("Setup I2C");
+ int sda = 5;
+  int scl = 4;
+  Wire.begin(sda, scl);
+
+   while (mySensor.beginI2C() == false) //Begin communication over I2C
+  {
+    Serial.println("The sensor did not respond. Please check wiring.");
+    delay (2000);
+   // Serial.println("jump to elfin");
+   // goto elfin2;
+  }
+}
+
+// MQTT callback
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -83,17 +110,20 @@ void reconnect() {
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Create a random client ID
-    String clientId = "ESP8266Client-";
-    clientId += String(random(0xffff), HEX);
-    clientId = "Device_02";
+   // String clientId = "ESP8266Client-";
+  //  clientId += String(random(0xffff), HEX);
+    String clientId = "Device_02";
     // Attempt to connect
     if (client.connect(clientId.c_str())) {
       Serial.print(clientId);
       Serial.println(" client connected");
+      // get sensor readings
+      read_sensors();
+      format_payload();
       // Once connected, publish an announcement...
-      client.publish("environ/test", "hello world");
+      client.publish(PUB_TOPIC, mp);
       // ... and resubscribe
-      client.subscribe("environ/out");
+      client.subscribe(SUB_TOPIC);
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -103,11 +133,56 @@ void reconnect() {
     }
   }
 }
+// Read the sensors
+void read_sensors()
+{
+   Serial.print("Humidity: ");
+  humidity = mySensor.readFloatHumidity();
+  Serial.print(mySensor.readFloatHumidity(), 0);
+  baro = mySensor.readFloatPressure();
+  Serial.print(" Pressure: ");
+  Serial.print(mySensor.readFloatPressure(), 0);
+  alt = mySensor.readFloatAltitudeMeters();
+  Serial.print(" Alt: ");
+  //Serial.print(mySensor.readFloatAltitudeMeters(), 1);
+  Serial.print(mySensor.readFloatAltitudeFeet(), 1);
+  temp = mySensor.readTempF();
+  Serial.print(" Temp: ");
+  //Serial.print(mySensor.readTempC(), 2);
+  Serial.print(mySensor.readTempF(), 2);
+  Serial.println();
+}
+void format_payload(){
+  String humid = String(humidity);
+      int hleng = humid.length() + 1;
+      char harr[hleng];
+      humid.toCharArray(harr,hleng);
+     String dt =  String(temp);
+     int sleng = dt.length()+1;
+     char tarr[sleng];
+     dt.toCharArray(tarr,sleng);
+     // convert pressure to float
+     baro_f = baro.toFloat();
+     baro_f = baro_f / 100.;
+     String baro_z = String(baro_f,0);
+     int balng = baro_z.length() + 1;
+     char barr[balng];
+     baro_z.toCharArray(barr, balng);
+     strcpy(mp,"temperature: ");
+     strcat(mp,tarr);
+     strcat(mp," humidity: ");
+     strcat(mp,harr);
+     strcat (mp,"%");
+     strcat (mp, " Barometer: ");
+     strcat (mp, barr);
+     strcat (mp," mbar");
+}
 
 void setup() {
   pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
   Serial.begin(115200);
   setup_wifi();
+  setup_I2C();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
 }
@@ -123,9 +198,11 @@ void loop() {
   if (now - lastMsg > 2000) {
     lastMsg = now;
     ++value;
-    snprintf (msg, MSG_BUFFER_SIZE, "hello world #%ld", value);
+   // snprintf (msg, MSG_BUFFER_SIZE, "hello world #%ld", value);
+   read_sensors();
+   format_payload();
     Serial.print("Publish message: ");
-    Serial.println(msg);
-    client.publish("outTopic", msg);
+    Serial.println(mp);
+    client.publish(PUB_TOPIC, mp);
   }
 }
