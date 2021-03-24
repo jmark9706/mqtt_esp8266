@@ -17,6 +17,10 @@
   - Open the "Tools -> Board -> Board Manager" and click install for the ESP8266"
   - Select your ESP8266 in "Tools -> Board"
    Has LED output on pins 12, 13
+   Note: currently only the yellow led on pin 13, trying to figure out the failure
+   of the I2C data at times.  It is definitely caused by using pin 12 but it also
+   may be due to other things.  Without 12 being used, it also fails after several hours.
+   Note: added a yield() in the loop code.
 */
 
 #include <ESP8266WiFi.h>
@@ -44,6 +48,7 @@ PubSubClient client(espClient);
  BME280 mySensor;
  
 unsigned long lastMsg = 0;
+ unsigned long now;
 #define MSG_BUFFER_SIZE	(50)
 // char msg[MSG_BUFFER_SIZE];
 int value = 0;
@@ -100,13 +105,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   // Switch on the LED if an 1 was received as first character
   if ((char)payload[0] == '1') {
-    digitalWrite(BUILTIN_LED, LOW);   // Turn the LED on (Note that LOW is the voltage level
+ //   digitalWrite(BUILTIN_LED, LOW);   // Turn the LED on (Note that LOW is the voltage level
     // but actually the LED is on; this is because
     // it is active low on the ESP-01)
-     digitalWrite(BLUE, LOW);
+     digitalWrite(YELLOW, LOW);
   } else {
-    digitalWrite(BUILTIN_LED, HIGH);  // Turn the LED off by making the voltage HIGH
-     digitalWrite(BLUE, HIGH);
+ //   digitalWrite(BUILTIN_LED, HIGH);  // Turn the LED off by making the voltage HIGH
+     digitalWrite(YELLOW, HIGH);
   }
 
 }
@@ -193,26 +198,27 @@ void setup() {
   setup_I2C();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
+  now = millis();
 }
 
 void loop() {
-  digitalWrite(YELLOW, HIGH);
+ // digitalWrite(YELLOW, HIGH);
   if (!client.connected()) {
     reconnect();
   }
   client.loop();
-
-  unsigned long now = millis();
+  now = millis();
   if (now - lastMsg > 5000) {
     lastMsg = now;
     ++value;
    // snprintf (msg, MSG_BUFFER_SIZE, "hello world #%ld", value);
-   digitalWrite(YELLOW, LOW);
+  // digitalWrite(YELLOW, LOW);
    read_sensors();
    format_payload();
     Serial.print("Publish message: ");
     Serial.println(mp);
     client.publish(PUB_TOPIC, mp);
+    yield();
     
   }
 }
