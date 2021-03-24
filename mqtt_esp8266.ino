@@ -208,6 +208,7 @@ void loop() {
   }
   client.loop();
   now = millis();
+    yield();
   if (now - lastMsg > 5000) {
     lastMsg = now;
     ++value;
@@ -218,7 +219,7 @@ void loop() {
     Serial.print("Publish message: ");
     Serial.println(mp);
     client.publish(PUB_TOPIC, mp);
-    yield();
+  
     
   }
 }
