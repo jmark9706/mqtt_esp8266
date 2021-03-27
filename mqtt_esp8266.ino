@@ -21,6 +21,8 @@
    of the I2C data at times.  It is definitely caused by using pin 12 but it also
    may be due to other things.  Without 12 being used, it also fails after several hours.
    Note: added a yield() in the loop code.
+   Note: moved more variables from global in an attempt to debug fail after it has run for 20+ housrs
+   all of the readings are bogus, 100% humidity, etc. Probably nothing to do with memory leak
 */
 
 #include <ESP8266WiFi.h>
@@ -37,12 +39,13 @@ const char* password = "7138982048";
 const char* mqtt_server = "mqtt.bekinected.com";
 const char* SUB_TOPIC = "environ/sub";
 const char* PUB_TOPIC = "environ/test";
- String humidity, baro, alt, temp, device;
+ String humidity, baro, alt, temp, device, dt, humid, baro_z;
  float baro_f;
  char msg[70];
  char * mp = msg;
- char uarr[40];
- int uleng;
+ #define FX 30
+ char uarr[FX], harr [FX], tarr [FX], barr[FX];
+ int uleng, bleng, balng, hleng, tleng, sleng;
 WiFiClient espClient;
 PubSubClient client(espClient);
  BME280 mySensor;
@@ -164,20 +167,17 @@ void read_sensors()
   Serial.println();
 }
 void format_payload(){
-      String humid = String(humidity);
-      int hleng = humid.length() + 1;
-      char harr[hleng];
+      humid = String(humidity);
+      hleng = humid.length() + 1;
       humid.toCharArray(harr,hleng);
-     String dt =  String(temp);
-     int sleng = dt.length()+1;
-     char tarr[sleng];
+     dt =  String(temp);
+     sleng = dt.length()+1;
      dt.toCharArray(tarr,sleng);
      // convert pressure to float
      baro_f = baro.toFloat();
      baro_f = baro_f / 100.;
-     String baro_z = String(baro_f,0);
-     int balng = baro_z.length() + 1;
-     char barr[balng];
+     baro_z = String(baro_f,0);
+     balng = baro_z.length() + 1;
      baro_z.toCharArray(barr, balng);
      strcpy(mp,"temperature: ");
      strcat(mp,tarr);
